@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Attendance Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #d0f0fd, #e0ffe8);
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
+    h2, h3 {
+      text-align: center;
+      color: #444;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 500;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 12px;
+      background: #1abc9c;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+    button:hover {
+      background: #16a085;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .result, #summaryBox {
+      background: #f3faff;
+      border-left: 5px solid #1abc9c;
+      padding: 15px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px;
+      border: 1px solid #eee;
+      text-align: center;
+    }
+    th {
+      background: #f0f0f0;
+    }
+    canvas {
+      margin-top: 30px;
+    }
+
+    @media(max-width: 600px) {
+      .button-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>🎓 Attendance Tracker</h2>
+
+    <label>📅 Week</label>
+    <select id="weekSelector" onchange="loadWeekData()">
+      <option value="">-- New Week --</option>
+    </select>
+    <input type="text" id="weekName" placeholder="Enter week name" />
+
+    <label>Total Lectures:</label>
+    <input type="number" id="totalLectures" value="16">
+
+    <label>Total Labs:</label>
+    <input type="number" id="totalLabs" value="4">
+
+    <label>Lectures Attended:</label>
+    <input type="number" id="attendedLectures">
+
+    <label>Labs Attended:</label>
+    <input type="number" id="attendedLabs">
+
+    <div class="button-group">
+      <button onclick="saveAndDisplay()">💾 Save Week</button>
+      <button onclick="resetAll()">🗑️ Reset All</button>
+    </div>
+
+    <div class="result" id="output"></div>
+    <canvas id="attendanceChart" height="200"></canvas>
+    <div id="summaryBox"></div>
+    <div id="recordsTable"></div>
+  </div>
+
+  <script>
+    function getData() {
+      return JSON.parse(localStorage.getItem("attendanceData")) || [];
+    }
+
+    function saveData(data) {
+      localStorage.setItem("attendanceData", JSON.stringify(data));
+    }
+
+    function saveAndDisplay() {
+      const week = document.getElementById("weekName").value.trim();
+      const lectures = parseInt(document.getElementById("totalLectures").value);
+      const labs = parseInt(document.getElementById("totalLabs").value);
+      const attendedLectures = parseInt(document.getElementById("attendedLectures").value);
+      const attendedLabs = parseInt(document.getElementById("attendedLabs").value);
+
+      const total = lectures + (labs * 2);
+      const attended = attendedLectures + (attendedLabs * 2);
+      const percent = (attended / total) * 100;
+
+      let data = getData();
+      const existingIndex = data.findIndex(d => d.week === week);
+
+      const record = { week, attended, total, percent };
+
+      if (existingIndex !== -1) {
+        data[existingIndex] = record;
+      } else {
+        data.push(record);
+      }
+
+      saveData(data);
+      updateWeekDropdown();
+      drawChartAndSummary(data);
+
+      document.getElementById("output").innerHTML = `
+        <b>${week}</b><br>
+        Attended: ${attended} / ${total}<br>
+        Percentage: ${percent.toFixed(2)}%
+      `;
+    }
+
+    function drawChartAndSummary(data) {
+      const labels = data.map(d => d.week);
+      const percentages = data.map(d => d.percent.toFixed(2));
+
+      const ctx = document.getElementById("attendanceChart").getContext("2d");
+      if (window.myChart) window.myChart.destroy();
+
+      window.myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Attendance %',
+            data: percentages,
+            backgroundColor: '#4caf50',
+            borderColor: '#388e3c',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100
+            }
+          }
+        }
+      });
+
+      let totalAttended = 0, totalPossible = 0;
+      data.forEach(d => {
+        totalAttended += d.attended;
+        totalPossible += d.total;
+      });
+
+      const overallPercent = (totalAttended / totalPossible) * 100;
+
+      document.getElementById("summaryBox").innerHTML = `
+        <h3>📊 Total Attendance Summary</h3>
+        Total Attended: <b>${totalAttended}</b> / ${totalPossible}<br>
+        Overall Percentage: <b>${overallPercent.toFixed(2)}%</b>
+      `;
+
+      drawTable(data);
+    }
+
+    function resetAll() {
+      if (confirm("Are you sure you want to delete all attendance records?")) {
+        localStorage.removeItem("attendanceData");
+        location.reload();
+      }
+    }
+
+    function updateWeekDropdown() {
+      const data = getData();
+      const select = document.getElementById("weekSelector");
+      select.innerHTML = `<option value="">-- New Week --</option>`;
+      data.forEach(d => {
+        const option = document.createElement("option");
+        option.value = d.week;
+        option.textContent = d.week;
+        select.appendChild(option);
+      });
+    }
+
+    function loadWeekData() {
+      const selected = document.getElementById("weekSelector").value;
+      if (!selected) {
+        document.getElementById("weekName").value = '';
+        document.getElementById("attendedLectures").value = '';
+        document.getElementById("attendedLabs").value = '';
+        return;
+      }
+
+      const data = getData();
+      const weekData = data.find(d => d.week === selected);
+      if (weekData) {
+        document.getElementById("weekName").value = weekData.week;
+        // Try to estimate split — may be rough
+        document.getElementById("attendedLectures").value = '';
+        document.getElementById("attendedLabs").value = '';
+      }
+    }
+
+    function drawTable(data) {
+      let html = `<h3>📅 Weekly Records</h3><table>
+        <tr>
+          <th>Week</th>
+          <th>Attended</th>
+          <th>Total</th>
+          <th>Percentage</th>
+        </tr>`;
+      data.forEach(d => {
+        html += `
+          <tr>
+            <td>${d.week}</td>
+            <td>${d.attended}</td>
+            <td>${d.total}</td>
+            <td>${d.percent.toFixed(2)}%</td>
+          </tr>`;
+      });
+      html += `</table>`;
+      document.getElementById("recordsTable").innerHTML = html;
+    }
+
+    window.onload = () => {
+      const data = getData();
+      if (data.length > 0) {
+        updateWeekDropdown();
+        drawChartAndSummary(data);
+      }
+    };
+  </script>
+</body>
+</html>
